@@ -84,7 +84,7 @@ def test_empty_plan_for_non_misissue_dataset(sample):
     assert plan['reconciliation']['grand_balanced'] is True
 
 
-def test_publish_idempotent_and_keeps_old_balance(tmp_path):
+def test_publish_idempotent_and_keeps_old_balance(tmp_path, mis):
     db = str(tmp_path / 'w.sqlite')
     store.save(db, mis)
     rid = mis['manifest']['run_id']
@@ -108,7 +108,7 @@ def json_loads_previous(doc, before):
     return bool(doc.get('previous_run'))
 
 
-def test_republish_with_new_key_blocked(tmp_path):
+def test_republish_with_new_key_blocked(tmp_path, mis):
     db = str(tmp_path / 'w.sqlite')
     store.save(db, mis)
     rid = mis['manifest']['run_id']
@@ -118,7 +118,7 @@ def test_republish_with_new_key_blocked(tmp_path):
     assert exc.value.code == 'ALREADY_PUBLISHED'
 
 
-def test_stale_revision_rejected(tmp_path):
+def test_stale_revision_rejected(tmp_path, mis):
     db = str(tmp_path / 'w.sqlite')
     store.save(db, mis)
     rid = mis['manifest']['run_id']
@@ -129,7 +129,7 @@ def test_stale_revision_rejected(tmp_path):
     assert 'withdrawal_published' not in store.get(db, rid)
 
 
-def test_rollback_restores_previous_balance(tmp_path):
+def test_rollback_restores_previous_balance(tmp_path, mis):
     db = str(tmp_path / 'w.sqlite')
     store.save(db, mis)
     rid = mis['manifest']['run_id']
@@ -153,7 +153,7 @@ def test_publish_empty_plan_blocked(tmp_path, sample):
     assert exc.value.code == 'NO_WITHDRAWAL_PLAN'
 
 
-def test_failed_publish_marks_doc_and_keeps_balance(tmp_path, monkeypatch):
+def test_failed_publish_marks_doc_and_keeps_balance(tmp_path, monkeypatch, mis):
     db = str(tmp_path / 'w.sqlite')
     store.save(db, mis)
     rid = mis['manifest']['run_id']
