@@ -13,6 +13,7 @@
 | M5 退货回拨 | 执行并复核退货回拨 | `POST /api/refund` | `app/modules/refund/rules.py` | `tests/test_refund.py` |
 | M6 余额对账 | 执行并复核余额对账 | `POST /api/reconcile` | `app/modules/reconcile/rules.py` | `tests/test_reconcile.py` |
 | M7 期末归档 | 执行并复核期末归档 | `POST /api/archive` | `app/modules/archive/rules.py` | `tests/test_archive.py` |
+| M8 误发撤回 | 裁决并发布误发批次撤回 | `POST /api/withdrawal`、`POST /api/runs/{run_id}/withdrawals/publish` | `app/modules/withdrawal/rules.py`、`app/store.py` | `tests/test_withdrawal.py`、`tests/test_withdrawal_api.py` |
 
 ## 陷阱登记
 
@@ -37,3 +38,15 @@
 ## 已知不覆盖
 
 数据来自仓内样例或用户粘贴文件，不连接外部业务生产系统。平台不执行实际资金划转或行政审批。
+
+## 误发撤回专项（M8）
+
+| 风险点 | 朴素实现的问题 | 本项目处理 | 处理位置 | 测试 |
+|---|---|---|---|---|
+| 整撤 vs 部分撤裁决 | 直接整批撤销会使依赖误发积分的历史消费余额为负、记录失真 | 反事实重放判定历史是否成立，分别走整批撤销/部分撤回 | `app/modules/withdrawal/rules.py` | `tests/test_withdrawal.py::test_full_vs_partial_decisions` |
+| 已耗用积分追不回 | 按误发额硬扣导致会员余额为负 | 部分撤回仅扣尚可追回余额，兜底禁止负余额 | `app/modules/withdrawal/rules.py` | `tests/test_withdrawal.py::test_partial_recovers_only_remaining` |
+| 历史记录被覆盖 | 删除原 EARN/SPEND 后财务无法追查 | 原始记录不可变，只追加 REVOKE 流水 | `app/modules/withdrawal/rules.py` | `tests/test_withdrawal.py::test_original_records_untouched` |
+| 重复发布重复扣减 | 每次点击都再扣一次 | 幂等键 + 撤回单唯一约束，重复返回同一单据 | `app/store.py::publish_withdrawal` | `tests/test_withdrawal.py::test_publish_idempotent_and_keeps_old_balance` |
+| 发布失败污染余额 | 中途异常留下半扣状态 | 事务内备份旧 run，失败回滚并标记发布失败 | `app/store.py::publish_withdrawal` | `tests/test_withdrawal.py::test_failed_publish_marks_doc_and_keeps_balance` |
+| 并发/陈旧覆盖 | 旧页面提交覆盖新余额 | 乐观锁 revision，陈旧提交 409 | `app/store.py::publish_withdrawal` | `tests/test_withdrawal.py::test_stale_revision_rejected` |
+| 越界处理其他批次 | 撤回误伤常规营销权益 | 按规则名 `月底奖励` 严格圈定撤回范围 | `app/modules/withdrawal/rules.py` | `tests/test_withdrawal.py::test_misissue_context_and_rule_loaded` |

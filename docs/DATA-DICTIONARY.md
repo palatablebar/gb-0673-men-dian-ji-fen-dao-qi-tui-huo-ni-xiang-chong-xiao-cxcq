@@ -5,3 +5,15 @@
 退款必须引用同一会员已成功消费，累计退款不得超过原消费。部分退款按原分配的逆序回拨，先回拨最后消耗的批次；未到期恢复，已到期只记过期退款，绝不复活。后续消费使用回拨后的可用余额。
 发放积分=可用积分+已消费积分−全部已退款积分+自然到期积分+过期退款积分。已退款包括有效恢复与过期不恢复。失败消费与失败退款均不改余额，移入隔离。
 期末时点默认2026-11-03T00:00:00+08:00，未来事件隔离。示例会员00001：100+80发放，消费120，退款30，其中20恢复、10过期；再消费50后剩余30。
+
+## 误发批次撤回（M8）
+
+误发批数据集 `misissue` 使用独立上下文 `context-misissue.json`，结算时点2026-11-17。误发发放通过规则名 `月底奖励` 标识，撤回范围严格限定该规则的 EARN 批次（字段 `withdrawal_rule`），不触碰 `常规` 批次与其他营销权益。
+
+反事实重放：剔除误发 EARN 及其批次后，按同一 FEFO 与退款规则重放该户全部历史。历史 SPEND/REFUND 全部成立的户裁决为 `整批撤销`（reason_code `FULL_REVOKE_FEASIBLE`），撤回额等于误发额；存在失败事件的户裁决为 `部分撤回`（`PARTIAL_HISTORY_DEPENDENT`，可追回为零时为 `NOTHING_RECOVERABLE`），撤回额等于误发批次当前 `remaining` 之和，即尚可追回部分。
+
+户级字段：`wrong_issued` 误发额、`recoverable` 尚可追回、`consumed` 账面已耗、`clawback` 实际撤回额、`forfeited` 账面核销（误发额−撤回额）、`lost` 现金口径不可追（仅部分撤回户等于 consumed）、`before_balance`/`after_balance` 撤回前后余额、`affected_spends` 反事实重放中失去支撑的事件号。守恒：误发额=撤回额+账面核销；撤回前总额−撤回总额=撤回后总额；任一户撤回后余额不得为负；撤回额不得超过误发额。
+
+原始记录保持不可变：撤回只在流水追加 `REVOKE` 条目（编号 `RV-<原批次号>`，含 `decision`、`recoverable_points`、`forfeited_points`、`batch`、`reason_code`），EARN/SPEND/REFUND 与隔离记录不删除、不覆盖。
+
+发布落库于独立 `withdrawals` 表：单据号 `WD-<plan_digest前12位>`，幂等键默认 `plan-<run_id>-<plan_digest前16位>`。状态机 `待发布→已发布`（失败置 `发布失败`，回滚置 `已回滚`）。发布事务先在同行 `previous_run_result` 备份旧 run 完整结果，再以乐观锁更新 run 余额并递增 revision；异常回滚保证旧版本余额可恢复。回滚用备份还原 run，自身幂等。

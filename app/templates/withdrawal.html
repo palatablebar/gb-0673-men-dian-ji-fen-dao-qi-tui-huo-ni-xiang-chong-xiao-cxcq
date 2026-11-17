@@ -1,0 +1,92 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel primary-panel">
+  <div class="panel__head"><h2>误发批次撤回（{{ state.withdrawal_plan.batch }} / 规则：{{ state.withdrawal_plan.wrong_rule }}）</h2><span>{{ view.rows|length }} 户</span></div>
+  <div class="column-letters"><span>A</span><span>B</span><span>C</span><span>D</span><span>E</span><span>F</span><span>G</span><span>H</span></div>
+  {{ cells(view.rows) }}
+</section>
+<div class="grid">
+  <section class="panel">
+    <div class="panel__head"><h2>撤回对账确认</h2><span>结算 {{ state.withdrawal_plan.as_of[:10] }}</span></div>
+    <div class="reconcile-box">
+      {% for name, value in state.withdrawal_plan.reconciliation.items() %}
+      <div class="reconcile-item"><small>{{ meta.labels.get(name, name) }}</small><b class="{% if value is sameas true %}ok{% elif value is sameas false %}bad{% endif %}">{{ value }}</b></div>
+      {% endfor %}    </div>
+    <div class="publish-bar">
+      <input id="idempotency-key" placeholder="幂等键（留空按方案自动生成）">
+      <input id="expected-revision" type="hidden" value="{{ state.revision }}">
+      <button id="publish-withdrawal">发布撤回</button>
+      <output id="publish-result" aria-live="polite"></output>
+    </div>
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>撤回后余额（对账口径）</h2><span>{{ state.withdrawal_plan.post_balances|length }} 户</span></div>
+    <div class="balance-grid">
+      {% for row in state.withdrawal_plan.post_balances %}<div class="member-cell"><small>{{ row.member }}</small><b>{{ row.remaining }}</b></div>{% endfor %}
+    </div>
+  </section>
+</div>
+<div class="grid">
+  <section class="panel">
+    <div class="panel__head"><h2>REVOKE 撤回流水（追加，不改原始记录）</h2><span>{{ state.withdrawal_plan.revoke_entries|length }} 笔</span></div>
+    {{ cells(state.withdrawal_plan.revoke_entries) }}
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>发布记录与状态</h2><span>{{ state.withdrawal_docs|length }} 单</span></div>
+    <div class="withdrawal-docs">
+      {% for doc in state.withdrawal_docs %}
+      <div class="doc-line">
+        <b>{{ doc.id }}</b><span class="state-{{ doc.state }}">{{ doc.state }}</span>
+        <small>{{ doc.run_id }} / rev {{ doc.revision }} / 撤回 {{ doc.reconciliation.clawback_total }} 分</small>
+        <button class="rollback-btn" data-id="{{ doc.id }}" {% if doc.state != '已发布' %}disabled{% endif %}>回滚恢复旧余额</button>
+      </div>
+      {% else %}<div class="doc-line"><small>尚无发布记录，发布失败不会改动余额。</small></div>{% endfor %}
+    </div>
+  </section>
+</div>
+<div class="grid">
+  <section class="panel">
+    <div class="panel__head"><h2>原始发放 / 消费 / 退货记录（可追查，未覆盖）</h2><span>{{ state.records|length }} 行</span></div>
+    {{ cells(state.records) }}
+  </section>
+  <section class="panel">
+    <div class="panel__head"><h2>撤回范围与历史消费核对依据</h2><span>反事实重放</span></div>
+    <div class="scope-box">
+      <p>剔除误发规则「{{ state.withdrawal_plan.wrong_rule }}」的发放后重放全部历史：消费/退货仍成立的户走整批撤销；受影响事件列出的户改为部分撤回，仅收回误发批次尚可追回余额。</p>
+      {% for row in view.rows %}
+      <div class="scope-line"><b>{{ row.member }}</b><span>{{ row.decision }}</span><code>{{ row.reason_code }}</code><small>受影响事件：{{ row.affected_spends|join(', ') if row.affected_spends else '无' }}</small></div>
+      {% endfor %}
+    </div>
+  </section>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded',()=>{
+  const runId=document.body.dataset.runId;
+  const out=document.querySelector('#publish-result');
+  const btn=document.querySelector('#publish-withdrawal');
+  btn.addEventListener('click',async()=>{
+    btn.disabled=true;out.textContent='发布中…';
+    const body={revision:Number(document.querySelector('#expected-revision').value)};
+    const key=document.querySelector('#idempotency-key').value.trim();
+    if(key)body.idempotency_key=key;
+    try{
+      const res=await fetch('/api/runs/'+runId+'/withdrawals/publish',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+      const data=await res.json();
+      if(!res.ok)throw Error(data.detail);
+      out.textContent='已发布 '+data.id+'（'+data.state+'）';
+      setTimeout(()=>location.reload(),600);
+    }catch(e){out.textContent=e.message;btn.disabled=false;}
+  });
+  document.querySelectorAll('.rollback-btn:not([disabled])').forEach(b=>b.addEventListener('click',async()=>{
+    if(!confirm('回滚将用发布前备份恢复旧版本余额，确认？'))return;
+    b.disabled=true;
+    try{
+      const res=await fetch('/api/withdrawals/'+b.dataset.id+'/rollback',{method:'POST'});
+      const data=await res.json();
+      if(!res.ok)throw Error(data.detail);
+      setTimeout(()=>location.reload(),400);
+    }catch(e){alert(e.message);b.disabled=false;}
+  }));
+});
+</script>
+{% endblock %}

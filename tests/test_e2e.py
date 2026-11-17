@@ -14,6 +14,23 @@ def test_seven_entries(tmp_path,monkeypatch):
     for k in main.MODULES:
         assert c.post('/api/'+k,json={}).status_code==200
         assert c.get('/'+k).status_code==200
+def test_eight_modules_registered():
+    assert main.MODULES[-1]=='withdrawal'
+    assert len(main.MODULES)==8
+def test_misissue_withdrawal_end_to_end(tmp_path,monkeypatch):
+    c=client(tmp_path,monkeypatch)
+    run=c.post('/api/runs',json={'dataset':'misissue'}).json()
+    rid=run['manifest']['run_id']
+    page=c.get('/withdrawal?run_id='+rid)
+    assert page.status_code==200 and '误发批次撤回' in page.text
+    published=c.post(f'/api/runs/{rid}/withdrawals/publish',json={'revision':run['revision']})
+    assert published.status_code==200
+    assert published.json()['state']=='已发布'
+    # 重复发布同幂等键不重复扣减
+    again=c.post(f'/api/runs/{rid}/withdrawals/publish',
+                 json={'idempotency_key':published.json()['idempotency_key']})
+    assert again.json()['id']==published.json()['id']
+    assert c.get('/api/export/'+rid).status_code==200
 def test_bad_dataset(tmp_path,monkeypatch):
     c=client(tmp_path,monkeypatch);assert c.post('/api/runs',json={'dataset':'../bad'}).status_code==422
 def test_missing_run(tmp_path,monkeypatch):

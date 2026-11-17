@@ -10,7 +10,8 @@
     "消费到期",
     "退货回拨",
     "余额对账",
-    "期末归档"
+    "期末归档",
+    "误发撤回"
   ],
   "rule": "消费先用最早到期批次；退款按原消费分配逆向恢复，已过期部分不得复活",
   "lane": "L5",
@@ -29,7 +30,8 @@
     "consumption",
     "refund",
     "reconcile",
-    "archive"
+    "archive",
+    "withdrawal"
   ],
   "labels": {
     "id": "事件号",
@@ -58,6 +60,32 @@
     "refunded": "退款",
     "expired": "到期",
     "points_balanced": "积分守恒",
-    "allocations": "回拨批次"
+    "allocations": "回拨批次",
+    "decision": "撤回裁决",
+    "wrong_issued": "误发额",
+    "recoverable": "尚可追回",
+    "clawback": "撤回额",
+    "lost": "已耗用不可追",
+    "before_balance": "撤回前余额",
+    "after_balance": "撤回后余额",
+    "publish_state": "发布状态",
+    "revoke_lots": "撤回批次",
+    "reason_code": "裁决依据",
+    "idempotency_key": "幂等键",
+    "published_at": "发布时刻",
+    "wrong_rule": "误发规则",
+    "consumed": "账面已耗",
+    "forfeited": "账面核销",
+    "forfeited_total": "账面核销合计",
+    "full_revoke": "整批撤户数",
+    "partial_revoke": "部分撤户数",
+    "clawback_total": "撤回总额",
+    "wrong_issued_total": "误发总额",
+    "balanced": "户内等式",
+    "grand_balanced": "总额等式",
+    "no_negative": "无负余额",
+    "within_issued": "撤回不超误发",
+    "replay_verified": "重放核对",
+    "history_checked": "历史成立"
   }
 }
